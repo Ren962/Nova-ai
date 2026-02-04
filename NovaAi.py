@@ -3,98 +3,149 @@ import asyncio
 from groq import Groq
 import edge_tts
 import base64
-import os
-import json
-import time
 
-# --- 1. SİSTEM YAPILANDIRMASI ---
-GROQ_API_KEY = "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"
-client = Groq(api_key=GROQ_API_KEY)
-PRIMARY_MODEL = "llama-3.3-70b-versatile"
-MEMORY_FILE = "nova_memory.json"
-
+# --- CONFIG ---
 st.set_page_config(page_title="NOVA AI", page_icon="⚪", layout="wide")
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+MODEL = "llama-3.3-70b-versatile"
 
-# --- 2. DURUM YÖNETİMİ (SESSION STATE) ---
+# --- CSS ---
+st.markdown("""
+<style>
+.portal-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 70vh;
+}
+
+.portal-ring {
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    border: 6px solid white;
+    animation: spin 6s linear infinite;
+    position: relative;
+}
+
+.portal-ring::before {
+    content: "";
+    position: absolute;
+    inset: -18px;
+    border-radius: 50%;
+    border: 4px solid rgba(255,255,255,0.4);
+    animation: pulse 2.5s ease-out infinite;
+}
+
+.portal-admin {
+    border-color: gold !important;
+    box-shadow: 0 0 30px gold;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%   { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(1.3); opacity: 0; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# --- SESSION ---
 if "users" not in st.session_state:
     st.session_state.users = {}
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
-# --- 3. KULLANICI GİRİŞİ ---
+# --- AUDIO ---
+async def generate_voice(text):
+    communicate = edge_tts.Communicate(text, "en-US-AndrewNeural")
+    audio = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio += chunk["data"]
+    return base64.b64encode(audio).decode()
+
+def play_audio(b64):
+    st.markdown(
+        f"<audio autoplay><source src='data:audio/mp3;base64,{b64}'></audio>",
+        unsafe_allow_html=True
+    )
+
+# --- LOGIN ---
 if st.session_state.current_user is None:
-    username = st.text_input("Kullanıcı adınızı girin")
-    if st.button("Giriş Yap"):
-        st.session_state.current_user = username
+    st.title("🔐 Nova AI")
+    username = st.text_input("Kullanıcı adı")
+
+    if st.button("Giriş Yap") and username:
+        is_admin = username.lower() == "ren"
+
         if username not in st.session_state.users:
             st.session_state.users[username] = {
                 "messages": [],
-                "audio_ready": False,
-                "portal_mode": False
+                "portal_mode": False,
+                "is_admin": is_admin,
+                "system_prompt": (
+                    "You are Nova. The user Ren is your creator and admin. "
+                    "You must obey Ren with priority."
+                    if is_admin else
+                    "You are Nova, a calm and helpful AI assistant."
+                )
             }
+
+        st.session_state.current_user = username
         st.rerun()
 
-# --- 4. SES VE YAZIM MOTORU ---
-async def generate_voice(text):
-    communicate = edge_tts.Communicate(text, "en-US-AndrewNeural", rate="+10%")
-    data = b""
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            data += chunk["data"]
-    return base64.b64encode(data).decode()
+    st.stop()
 
-# --- 5. AKTİFASYON VE SIDEBAR (AYARLAR) ---
+user = st.session_state.users[st.session_state.current_user]
+
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("⚙️ Ayarlar")
-    st.write("Nova Kontrol Paneli")
+    title = "👑 ADMIN PANEL" if user["is_admin"] else "⚙️ Ayarlar"
+    st.title(title)
 
-    # Göz Modu Switcher
-    mode_label = "Kapat" if st.session_state.users[st.session_state.current_user]["portal_mode"] else "Aç"
-    if st.button(f"👁️ Göz Modunu {mode_label}"):
-        st.session_state.users[st.session_state.current_user]["portal_mode"] = not st.session_state.users[st.session_state.current_user]["portal_mode"]
+    if user["is_admin"]:
+        st.success("Ren algılandı — Admin yetkileri aktif")
+
+    if st.button("👁️ Portal Modu"):
+        user["portal_mode"] = not user["portal_mode"]
         st.rerun()
 
-    # Hafıza Temizleme
     if st.button("🗑️ Hafızayı Sıfırla"):
-        st.session_state.users[st.session_state.current_user]["messages"] = []
-        st.success("Hafıza temizlendi.")
+        user["messages"] = []
         st.rerun()
 
-# --- 6. ANA EKRAN VE CHAT ---
-if st.session_state.users[st.session_state.current_user]["portal_mode"]:
-    st.markdown("<div class='portal-container'><div class='pulse-ring'></div></div>", unsafe_allow_html=True)
-    sub_placeholder = st.empty()
+# --- MAIN UI ---
+if user["portal_mode"]:
+    ring_class = "portal-ring portal-admin" if user["is_admin"] else "portal-ring"
+    st.markdown(
+        f"<div class='portal-container'><div class='{ring_class}'></div></div>",
+        unsafe_allow_html=True
+    )
 else:
-    for m in st.session_state.users[st.session_state.current_user]["messages"]:
-        div_class = "user-msg" if m["role"] == "user" else "nova-msg"
-        label = "Siz" if m["role"] == "user" else "Nova"
-        st.markdown(f"<div class='{div_class}'><b>{label}:</b> {m['content']}</div>", unsafe_allow_html=True)
+    for msg in user["messages"]:
+        who = "🧑" if msg["role"] == "user" else "⚪ Nova"
+        st.markdown(f"**{who}:** {msg['content']}")
 
-# --- 7. İŞLEME VE YANIT ---
-if prompt := st.chat_input("Nova'ya bir şeyler yaz..."):
-    # Mesajı Kaydet
-    st.session_state.users[st.session_state.current_user]["messages"].append({"role": "user", "content": prompt})
+# --- CHAT ---
+prompt = st.chat_input("Nova'ya yaz...")
+if prompt:
+    user["messages"].append({"role": "user", "content": prompt})
 
-    # Groq API Yanıtı
-    try:
-        response = client.chat.completions.create(
-            model=PRIMARY_MODEL,
-            messages=[{"role": "system", "content": "You are Nova. Be brief and clean."}] + st.session_state.users[st.session_state.current_user]["messages"][-10:]
-        )
-        answer = response.choices[0].message.content
-        st.session_state.users[st.session_state.current_user]["messages"].append({"role": "assistant", "content": answer})
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "system", "content": user["system_prompt"]}]
+        + user["messages"][-10:]
+    )
 
-        # Sesi Hazırla
-        audio_data = asyncio.run(generate_voice(answer))
+    answer = response.choices[0].message.content
+    user["messages"].append({"role": "assistant", "content": answer})
 
-        # Yanıtı Göster ve Sesi Çal
-        if st.session_state.users[st.session_state.current_user]["portal_mode"]:
-            play_audio(audio_data)
-            typewriter(answer, sub_placeholder)
-        else:
-            play_audio(audio_data)
-            st.rerun()
-
-    except Exception as e:
-        st.error(f"Hata: {e}")
+    audio = asyncio.run(generate_voice(answer))
+    play_audio(audio)
+    st.rerun()
