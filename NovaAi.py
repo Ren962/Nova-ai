@@ -24,31 +24,19 @@ if "users" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
-# ---------------- HELPERS ----------------
-def typewriter_html(text: str) -> str:
-    safe = (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
-    return "".join(
-        f"<span style='animation-delay:{i*0.025}s'>{c}</span>"
-        for i, c in enumerate(safe)
-    )
-
 # ---------------- LOGIN ----------------
 if not st.session_state.current_user:
     st.title("Login")
 
     username = st.text_input("Username")
 
-    password = None
+    password = ""
     if username.lower() == "ren":
-        password = st.text_input("Admin password", type="password")
+        password = st.text_input("Password", type="password")
 
     if st.button("Login"):
         if username.lower() == "ren" and password != "ayanami":
-            st.error("Invalid admin password")
+            st.error("Incorrect password")
             st.stop()
 
         st.session_state.current_user = username
@@ -56,12 +44,13 @@ if not st.session_state.current_user:
         if username not in st.session_state.users:
             st.session_state.users[username] = {
                 "messages": [],
-                "system_prompt": (
-                    f"You are Nova, the personal AI assistant for {username}. "
-                    "Respond naturally and clearly."
-                ),
                 "portal_mode": False,
-                "is_admin": username.lower() == "ren",
+                "system_prompt": (
+                    f"You are Nova, a personal AI assistant. "
+                    f"You are speaking directly to {username}. "
+                    "Never refer to the user in the third person. "
+                    "Be clear, calm, and intelligent."
+                )
             }
 
         st.rerun()
@@ -74,10 +63,7 @@ user = st.session_state.users[st.session_state.current_user]
 with st.sidebar:
     st.title("Settings")
 
-    if user["is_admin"]:
-        st.info("Admin: Ren")
-
-    if st.button("Eye Mode"):
+    if st.button("Toggle Eye Mode"):
         user["portal_mode"] = not user["portal_mode"]
         st.rerun()
 
@@ -85,15 +71,14 @@ with st.sidebar:
         user["messages"] = []
         st.rerun()
 
-# ---------------- STYLES ----------------
-ring_color = "#9bb7d4" if user["is_admin"] else "#000000"
+# ---------------- CSS ----------------
+ring_color = "#9bb7d4" if st.session_state.current_user.lower() == "ren" else "#000000"
 
 st.markdown(
     f"""
     <style>
     body {{
-        background-color: #000000;
-        color: #eaeaea;
+        background-color: #ffffff;
     }}
 
     .portal-container {{
@@ -101,7 +86,7 @@ st.markdown(
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        margin-top: 80px;
+        height: 80vh;
     }}
 
     .pulse-ring {{
@@ -109,26 +94,27 @@ st.markdown(
         height: 160px;
         border-radius: 50%;
         border: 4px solid {ring_color};
-        animation: pulse 2s infinite;
+        animation: pulse 2.2s infinite;
     }}
 
     @keyframes pulse {{
-        0% {{ transform: scale(1); opacity: 0.8; }}
-        50% {{ transform: scale(1.05); opacity: 1; }}
-        100% {{ transform: scale(1); opacity: 0.8; }}
+        0% {{ transform: scale(1); opacity: 0.6; }}
+        50% {{ transform: scale(1.08); opacity: 1; }}
+        100% {{ transform: scale(1); opacity: 0.6; }}
     }}
 
     .eye-text {{
-        margin-top: 30px;
+        margin-top: 24px;
         max-width: 700px;
         text-align: center;
         font-size: 16px;
         line-height: 1.6;
+        color: #111;
     }}
 
     .typewriter span {{
         opacity: 0;
-        animation: appear 0.01s forwards;
+        animation: appear 0.03s forwards;
     }}
 
     @keyframes appear {{
@@ -137,19 +123,27 @@ st.markdown(
 
     .user-msg {{
         text-align: right;
-        margin: 10px 0;
-        color: #9bb7d4;
+        margin: 8px 0;
+        color: #333;
     }}
 
     .nova-msg {{
         text-align: left;
-        margin: 10px 0;
-        color: #eaeaea;
+        margin: 8px 0;
+        color: #000;
     }}
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# ---------------- TYPEWRITER ----------------
+def typewriter_html(text):
+    safe = text.replace("<", "&lt;").replace(">", "&gt;")
+    return "".join(
+        f"<span style='animation-delay:{i*0.03}s'>{c}</span>"
+        for i, c in enumerate(safe)
+    )
 
 # ---------------- UI ----------------
 if user["portal_mode"]:
@@ -159,20 +153,19 @@ if user["portal_mode"]:
             last_answer = m["content"]
             break
 
-    animated = typewriter_html(last_answer)
-
     st.markdown(
         f"""
         <div class="portal-container">
             <div class="pulse-ring"></div>
             <div class="eye-text">
-                <div class="typewriter">{animated}</div>
+                <div class="typewriter">
+                    {typewriter_html(last_answer)}
+                </div>
             </div>
         </div>
         """,
         unsafe_allow_html=True
     )
-
 else:
     for m in user["messages"]:
         cls = "user-msg" if m["role"] == "user" else "nova-msg"
@@ -187,12 +180,10 @@ if prompt := st.chat_input("Type a message for Nova"):
 
     response = client.chat.completions.create(
         model=MODEL,
-        messages=[
-            {"role": "system", "content": user["system_prompt"]}
-        ] + user["messages"][-10:]
+        messages=[{"role": "system", "content": user["system_prompt"]}]
+        + user["messages"][-10:]
     )
 
     answer = response.choices[0].message.content
     user["messages"].append({"role": "assistant", "content": answer})
-
     st.rerun()
