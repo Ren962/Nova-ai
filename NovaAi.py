@@ -29,8 +29,8 @@ if not st.session_state.current_user:
     st.title("Login")
 
     username = st.text_input("Username")
-
     password = ""
+
     if username.lower() == "ren":
         password = st.text_input("Password", type="password")
 
@@ -59,6 +59,11 @@ if not st.session_state.current_user:
 
 user = st.session_state.users[st.session_state.current_user]
 
+# ---------------- COLORS ----------------
+is_ren = st.session_state.current_user.lower() == "ren"
+ring_color = "#9bb7d4" if is_ren else "#ffffff"
+text_color = ring_color if is_ren else "#ffffff"
+
 # ---------------- SIDEBAR ----------------
 with st.sidebar:
     st.title("Settings")
@@ -72,21 +77,22 @@ with st.sidebar:
         st.rerun()
 
 # ---------------- CSS ----------------
-ring_color = "#9bb7d4" if st.session_state.current_user.lower() == "ren" else "#000000"
-
 st.markdown(
     f"""
     <style>
     body {{
-        background-color: #ffffff;
+        background-color: #000000;
+        color: #ffffff;
     }}
 
     .portal-container {{
+        position: relative;
+        width: 100%;
+        min-height: 70vh;
+        padding-top: 60px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        height: 80vh;
     }}
 
     .pulse-ring {{
@@ -94,7 +100,8 @@ st.markdown(
         height: 160px;
         border-radius: 50%;
         border: 4px solid {ring_color};
-        animation: pulse 2.2s infinite;
+        animation: pulse 2.2s ease-in-out infinite;
+        box-sizing: border-box;
     }}
 
     @keyframes pulse {{
@@ -104,12 +111,15 @@ st.markdown(
     }}
 
     .eye-text {{
-        margin-top: 24px;
-        max-width: 700px;
+        margin-top: 28px;
+        width: 100%;
+        max-width: 720px;
+        padding: 0 16px;
         text-align: center;
         font-size: 16px;
         line-height: 1.6;
-        color: #111;
+        color: {text_color};
+        word-wrap: break-word;
     }}
 
     .typewriter span {{
@@ -123,14 +133,14 @@ st.markdown(
 
     .user-msg {{
         text-align: right;
-        margin: 8px 0;
-        color: #333;
+        margin: 10px 0;
+        color: #cccccc;
     }}
 
     .nova-msg {{
         text-align: left;
-        margin: 8px 0;
-        color: #000;
+        margin: 10px 0;
+        color: #ffffff;
     }}
     </style>
     """,
