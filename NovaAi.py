@@ -31,11 +31,11 @@ if not st.session_state.current_user:
     username = st.text_input("Username")
     password = ""
 
-    if username.lower() == "ren":
+    if username.lower() == "Vool":
         password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if username.lower() == "ren" and password != "ayanami":
+        if username.lower() == "Vool" and password != "8712":
             st.error("Incorrect password")
             st.stop()
 
