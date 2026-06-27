@@ -46,7 +46,7 @@ if not st.session_state.current_user:
                 "messages": [],
                 "portal_mode": False,
                 "system_prompt": (
-                    f"You are Nova, a personal AI assistant. "
+                    f"You are Plus+, a personal AI assistant. "
                     f"You are speaking directly to {username}. "
                     "Never refer to the user in the third person. "
                     "Be clear, calm, and intelligent."
