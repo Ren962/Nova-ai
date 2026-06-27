@@ -15,7 +15,7 @@ if not GROQ_API_KEY:
     st.stop()
 
 client = Groq(api_key=GROQ_API_KEY)
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "deepseek-r1-distill-llama-70b"
 
 # ---------------- STATE ----------------
 if "users" not in st.session_state:
